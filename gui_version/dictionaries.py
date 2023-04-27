@@ -12,7 +12,7 @@ entry_data = [
     "street",
     "codecity",
     "status",
-    "matrnr",
+    "matnr",
     "telephone",
     "email",
     "iban"
