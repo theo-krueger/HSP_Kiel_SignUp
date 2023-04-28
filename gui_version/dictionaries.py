@@ -18,7 +18,7 @@ entry_data = [
     "iban"
 ]
 
-poss_sex = {
+poss_gender = {
     "female": "weiblich",
     "male": "männlich",
     "diverse": "divers",
@@ -26,20 +26,33 @@ poss_sex = {
 }
 
 poss_status = {
-    "Beschäftigte/r des UKSH": "B-UKSH",
-    "Beschäftigte/r der Muthesius-HS": "B-MHS",
-    "Beschäftigte/r Geomar": "B-Geo",
-    "Beschäftigte/r IPN": "B-IPN",
-    "Externe/r ermäßigt": "Ext e",
-    "Externe/r": "Extern",
-    "Mitglied Alumni und Freunde der CAU e.V.": "Alumni",
-    "Beschäftigte/r einer anderen HS": "B-aH",
-    "Beschäftigte/r der FH": "B-FHK",
-    "Beschäftigte/r der UNI Kiel": "B-UKL",
-    "StudentIn einer anderen HS aus Schleswig-Holstein": "S-aHSH",
-    "StudentIn der Muthesius-HS": "S-MHS",
-    "StudentIn der WAK": "S-WAK",
-    "StudentIn der VFH": "S-VFH",
-    "StudentIn der FH": "S-FHK",
-    "StudentIn der UNI Kiel": "S-UKL"
+    "Student at UNI Kiel": "S-UKL",
+    "Student at FH": "S-FHK",
+    "Student at VFH": "S-VFH",
+    "Student at WAK": "S-WAK",
+    "Student at Muthesius-HS": "S-MHS",
+    "Student at another HS in Schleswig-Holstein": "S-aHSH",
+    "Working at UNI Kiel": "B-UKL",
+    "Working at IPN": "B-IPN",
+    "Working at UKSH": "B-UKSH",
+    "Working at Muthesius-HS": "B-MHS",
+    "Working at Geomar": "B-Geo",
+    "Extern discounted": "Ext e",
+    "Extern": "Extern",
+    "Member of 'Alumni und Freunde der CAU e.V.'": "Alumni"
 }
+
+show_matr = [
+    "Student at UNI Kiel",
+    "Student at FH",
+    "Student at Muthesius-HS",
+    "Student at another HS in Schleswig-Holstein",
+    "Working at UKSH"
+]
+
+show_tel = [
+    "Working at UNI Kiel",
+    "Working at IPN",
+    "Working at Muthesius-HS",
+    "Working at Geomar",
+]

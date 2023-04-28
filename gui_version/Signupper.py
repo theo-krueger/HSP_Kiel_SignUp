@@ -1,5 +1,5 @@
 def setup():
-    required = {'selenium'}
+    required = {'selenium', 'schwifty'}
     installed = {pkg.key for pkg in pkg_resources.working_set}
     missing = required - installed
 
@@ -21,6 +21,8 @@ try:
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.common.by import By
+    from schwifty import IBAN
+    import re
 
     from gui_version import dictionaries
 except ImportError:
@@ -36,6 +38,8 @@ except ImportError:
     from selenium.webdriver.support.ui import WebDriverWait
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.common.by import By
+    from schwifty import IBAN, exceptions
+    import re
 
     from gui_version import dictionaries
 
@@ -58,13 +62,13 @@ class Windows(tk.Tk):
             "day": tk.StringVar(),
             "time": tk.StringVar(),
             "guidance": tk.StringVar(),
-            "sex": tk.StringVar(),
+            "gender": tk.StringVar(),
             "firstname": tk.StringVar(),
             "lastname": tk.StringVar(),
             "street": tk.StringVar(),
             "codecity": tk.StringVar(),
             "status": tk.StringVar(),
-            "matnr": tk.IntVar(),
+            "matnr": tk.StringVar(),
             "telephone": tk.StringVar(),
             "email": tk.StringVar(),
             "iban": tk.StringVar()
@@ -143,7 +147,7 @@ class EntryPage(ttk.Frame):
         self.day_lbl = ttk.Label(self, text='Day')
         self.time_lbl = ttk.Label(self, text='Time')
         self.guidance_lbl = ttk.Label(self, text='Guidance')
-        self.sex_lbl = ttk.Label(self, text='Sex')
+        self.gender_lbl = ttk.Label(self, text='Gender')
         self.firstname_lbl = ttk.Label(self, text='First name')
         self.lastname_lbl = ttk.Label(self, text='Last name')
         self.street_lbl = ttk.Label(self, text='Street and number')
@@ -164,9 +168,9 @@ class EntryPage(ttk.Frame):
         self.time_box = ttk.Entry(self, textvariable=self.controller.app_data["time"])
         self.guidance_box = ttk.Entry(self, textvariable=self.controller.app_data["guidance"])
 
-        sex_list = [i for i in dictionaries.poss_sex.keys()]
-        self.controller.app_data["sex"].set(sex_list[0])
-        self.sex_box = tk.OptionMenu(self, self.controller.app_data["sex"], *sex_list)
+        gender_list = [i for i in dictionaries.poss_gender.keys()]
+        self.controller.app_data["gender"].set("Gender")
+        self.gender_box = tk.OptionMenu(self, self.controller.app_data["gender"], *gender_list)
 
         self.firstname_box = ttk.Entry(self, textvariable=self.controller.app_data["firstname"])
         self.lastname_box = ttk.Entry(self, textvariable=self.controller.app_data["lastname"])
@@ -174,7 +178,7 @@ class EntryPage(ttk.Frame):
         self.codecity_box = ttk.Entry(self, textvariable=self.controller.app_data["codecity"])
 
         status_list = [i for i in dictionaries.poss_status.keys()]
-        self.controller.app_data["status"].set(status_list[0])
+        self.controller.app_data["status"].set("Status")
         self.status_box = tk.OptionMenu(self, self.controller.app_data["status"], *status_list)
 
         self.matnr_box = ttk.Entry(self, textvariable=self.controller.app_data["matnr"])
@@ -185,12 +189,12 @@ class EntryPage(ttk.Frame):
         self.continue_button = ttk.Button(
             self,
             text='Continue',
-            command=lambda: [self.controller.update(), self.check_entries(), controller.show_frame(RunningPage)]
+            command=lambda: [self.controller.update(), self.check_entries(controller=controller)]
         )
 
         # arrange
-        full_width = 3
-        full_orientation = 'NSEW'
+        self.full_width = 3
+        self.full_orientation = 'NSEW'
         self.col_lbl = 1
         self.col_box = 2
         self.row_start = 2
@@ -201,7 +205,7 @@ class EntryPage(ttk.Frame):
         self.day_lbl.grid(row=self.row_start+5, column=self.col_lbl, sticky='W')
         self.time_lbl.grid(row=self.row_start+6, column=self.col_lbl, sticky='W')
         self.guidance_lbl.grid(row=self.row_start+7, column=self.col_lbl, sticky='W')
-        self.sex_lbl.grid(row=self.row_start+9, column=self.col_lbl, sticky='W', pady=(15, 0))
+        self.gender_lbl.grid(row=self.row_start+9, column=self.col_lbl, sticky='W', pady=(15, 0))
         self.firstname_lbl.grid(row=self.row_start+10, column=self.col_lbl, sticky='W')
         self.lastname_lbl.grid(row=self.row_start+11, column=self.col_lbl, sticky='W')
         self.street_lbl.grid(row=self.row_start+12, column=self.col_lbl, sticky='W')
@@ -210,38 +214,35 @@ class EntryPage(ttk.Frame):
         self.email_lbl.grid(row=self.row_start+16, column=self.col_lbl, sticky='W')
         self.iban_lbl.grid(row=self.row_start+17, column=self.col_lbl, sticky='W')
 
-        self.timestart_h_box.grid(row=self.row_start+1, column=self.col_box, sticky=full_orientation, pady=(20, 0))
+        self.timestart_h_box.grid(row=self.row_start+1, column=self.col_box, sticky=self.full_orientation, pady=(20, 0))
         self.timestart_sep.grid(row=self.row_start+1, column=self.col_box+1, pady=(20, 0))
-        self.timestart_m_box.grid(row=self.row_start+1, column=self.col_box+2, sticky=full_orientation, pady=(20, 0))
-        self.sport_box.grid(row=self.row_start+2, column=self.col_box, columnspan=full_width, sticky=full_orientation)
-        self.detail_box.grid(row=self.row_start+4, column=self.col_box, columnspan=full_width, sticky=full_orientation, pady=(15,0))
-        self.day_box.grid(row=self.row_start + 5, column=self.col_box, columnspan=full_width, sticky=full_orientation)
-        self.time_box.grid(row=self.row_start + 6, column=self.col_box, columnspan=full_width, sticky=full_orientation)
-        self.guidance_box.grid(row=self.row_start + 7, column=self.col_box, columnspan=full_width, sticky=full_orientation)
-        self.sex_box.grid(row=self.row_start+9, column=self.col_box, columnspan=full_width, sticky=full_orientation, pady=(15, 0))
-        self.firstname_box.grid(row=self.row_start+10, column=self.col_box, columnspan=full_width, sticky=full_orientation)
-        self.lastname_box.grid(row=self.row_start+11, column=self.col_box, columnspan=full_width, sticky=full_orientation)
-        self.street_box.grid(row=self.row_start+12, column=self.col_box, columnspan=full_width, sticky=full_orientation)
-        self.codecity_box.grid(row=self.row_start+13, column=self.col_box, columnspan=full_width, sticky=full_orientation)
-        self.status_box.grid(row=self.row_start+14, column=self.col_box, columnspan=full_width, sticky=full_orientation)
-        self.email_box.grid(row=self.row_start+16, column=self.col_box, columnspan=full_width, sticky=full_orientation)
-        self.iban_box.grid(row=self.row_start+17, column=self.col_box, columnspan=full_width, sticky=full_orientation)
+        self.timestart_m_box.grid(row=self.row_start+1, column=self.col_box+2, sticky=self.full_orientation, pady=(20, 0))
+        self.sport_box.grid(row=self.row_start+2, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
+        self.detail_box.grid(row=self.row_start+4, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation, pady=(15,0))
+        self.day_box.grid(row=self.row_start + 5, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
+        self.time_box.grid(row=self.row_start + 6, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
+        self.guidance_box.grid(row=self.row_start + 7, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
+        self.gender_box.grid(row=self.row_start+9, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation, pady=(15, 0))
+        self.firstname_box.grid(row=self.row_start+10, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
+        self.lastname_box.grid(row=self.row_start+11, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
+        self.street_box.grid(row=self.row_start+12, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
+        self.codecity_box.grid(row=self.row_start+13, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
+        self.status_box.grid(row=self.row_start+14, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
+        self.email_box.grid(row=self.row_start+16, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
+        self.iban_box.grid(row=self.row_start+17, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
 
         def matr_or_phone(*args):
-            show_matr = ["StudentIn der UNI Kiel", "StudentIn der FH", "StudentIn der Muthesius-HS",
-                         "StudentIn einer anderen HS aus Schleswig-Holstein", "Beschäftigte/r des UKSH"]
-            show_tel = ["Beschäftigte/r der UNI Kiel", "Beschäftigte/r der FH", "Beschäftigte/r IPN",
-                        "Beschäftigte/r Geomar", "Beschäftigte/r der Muthesius-HS"]
             mattel_wid = [self.matnr_lbl, self.matnr_box, self.telephone_lbl, self.telephone_box]
             for w in mattel_wid:
                 w.grid_remove()
-            if self.controller.app_data["status"].get() in show_matr:
+            if self.controller.app_data["status"].get() in dictionaries.show_matr:
                 self.matnr_lbl.grid(row=self.row_start+15, column=self.col_lbl, sticky='W')
-                self.matnr_box.grid(row=self.row_start+15, column=1, columnspan=full_width, sticky=full_orientation)
-            elif self.controller.app_data["status"].get() in show_tel:
+                self.matnr_box.grid(row=self.row_start+15, column=self.col_box, columnspan=self.full_width,
+                                    sticky=self.full_orientation)
+            elif self.controller.app_data["status"].get() in dictionaries.show_tel:
                 self.telephone_lbl.grid(row=self.row_start+15, column=self.col_lbl, sticky='W')
-                self.telephone_box.grid(row=self.row_start+15, column=self.col_box, columnspan=full_width,
-                                        sticky=full_orientation)
+                self.telephone_box.grid(row=self.row_start+15, column=self.col_box, columnspan=self.full_width,
+                                        sticky=self.full_orientation)
 
         self.controller.app_data["status"].trace("w", matr_or_phone)
 
@@ -282,7 +283,33 @@ class EntryPage(ttk.Frame):
         self.grid_rowconfigure(19, weight=1)
         self.grid_rowconfigure(20, weight=1)
 
-    def check_entries(self):
+    def check_entries(self, controller):
+        # check entries
+        check = True
+        # time
+        if not len(self.controller.app_data["timestart_h"].get()) == 2 or not len(self.controller.app_data["timestart_m"].get()) == 2:
+            print("Time format invalid, please notice that both the hours and minutes need two digits each...")
+            check = False
+        # code city
+        code, city = self.controller.app_data["codecity"].get().split(" ")
+        if not len(code) == 5:
+            print("Post code invalid, please check...")
+            check = False
+        # IBAN
+        try:
+            IBAN(self.controller.app_data["iban"].get(), validate_bban=True)
+        except exceptions:
+            print("IBAN invalid, please check...")
+            check = False
+        # email
+        if not re.fullmatch(r"[^@]+@[^@]+\.[^@]+", self.controller.app_data["email"].get()):
+            print("Email invalid, please check...")
+            check = False
+
+        if check:
+            controller.show_frame(RunningPage)
+
+        # print entries
         for entry in self.controller.app_data:
             try:
                 print(f"{entry}: {self.controller.app_data[entry].get()}")
@@ -334,7 +361,6 @@ class RunningPage(ttk.Frame):
         self.grid_rowconfigure(3, weight=1)
         self.grid_rowconfigure(4, weight=1)
 
-
     def get_time(self):
         time_str = time.strftime('%H:%M:%S')
         self.time_lbl.config(text=time_str)
@@ -347,7 +373,7 @@ class RunningPage(ttk.Frame):
         self.controller.app_data['unlock_time'] = f"{self.controller.app_data['timestart_h'].get()}:{self.controller.app_data['timestart_m'].get()}:00"
         self.controller.app_data['sport_form'] = self.controller.app_data['sport'].get().replace(" ", "_")
         self.controller.app_data['status_code'] = dictionaries.poss_status[self.controller.app_data['status'].get()]
-        self.controller.app_data['sex_code'] = dictionaries.poss_sex[self.controller.app_data['sex'].get()]
+        self.controller.app_data['gender_code'] = dictionaries.poss_gender[self.controller.app_data['gender'].get()]
 
     def signup(self):
         self.add_entries()
@@ -359,7 +385,6 @@ class RunningPage(ttk.Frame):
         # search for course
         while not finish_search:
             curr_time = self.get_time()
-            print(self.controller.app_data["unlock_time"])
 
             if not start:
                 if curr_time == self.controller.app_data['unlock_time']:  # start time
@@ -409,10 +434,10 @@ class RunningPage(ttk.Frame):
             time.sleep(1)
 
         # fill in data
-        # sex
-        boxes_sex = driver.find_elements(By.NAME, "sex")
-        for box in boxes_sex:
-            if box.accessible_name == " " + self.controller.app_data['sex_code']:
+        # gender
+        boxes_gender = driver.find_elements(By.NAME, "sex")
+        for box in boxes_gender:
+            if box.accessible_name == " " + self.controller.app_data['gender_code']:
                 box.click()
                 break
         # first name
