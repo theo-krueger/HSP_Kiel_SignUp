@@ -13,7 +13,7 @@ time = ""
 guidance = ""
 
 # Enter your personal data
-sex = "männlich"  # please look in the list provided below and enter the tag for your sex
+gender = "männlich"  # please look in the list provided below and enter the tag for your sex
 first_name = "John"
 last_name = "Doe"
 street_and_nr = "Examplestr. 1"
@@ -24,7 +24,7 @@ email = "stu00000@mail.uni-kiel.de"
 iban_nr = "DE12 3456 7890 9876 5432 10"
 
 '''
-poss_sex
+poss_gender
     "female": "weiblich",
     "male": "männlich",
     "diverse": "divers",

@@ -72,10 +72,10 @@ while not finish_search:
     time.sleep(1)
 
 # fill in data
-# sex
-boxes_sex = driver.find_elements(By.NAME, "sex")
-for box in boxes_sex:
-    if box.accessible_name == " " + Entry_data.sex:
+# gender
+boxes_gender = driver.find_elements(By.NAME, "sex")
+for box in boxes_gender:
+    if box.accessible_name == " " + Entry_data.gender:
         box.click()
         break
 # first name
@@ -106,22 +106,7 @@ driver.find_element(By.NAME, "tnbed").click()
 wait = WebDriverWait(driver, timeout=10, poll_frequency=1)
 wait.until(EC.element_to_be_clickable((By.ID, "bs_submit"))).click()
 
-# final submit
-alert = "alert('\nPlease check if everything is filled in and correct and do the final submit at the bottom of the page! Note: The browser will close automatically in 2 min. HAVE FUN! :)');"
-
-try:
-    driver.execute_script(alert)
-except Exception:
-    print('''
-    
-Something went wrong. No problem at this step.
-Please check if everything is filled in and correct and do the final submit at the bottom of the page!Have fun! :)
-    
-Note: The page will close in 2 min automatically or you can stop the script.
-    ''')
-
-time.sleep(120)
-
+print("Please check your data and do the final submit :)")
 # keeps site open
 # while True:
 #     pass
