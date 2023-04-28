@@ -1,47 +1,17 @@
-def setup():
-    required = {'selenium', 'schwifty'}
-    installed = {pkg.key for pkg in pkg_resources.working_set}
-    missing = required - installed
+import tkinter as tk
+from tkinter import ttk
+import time
+from datetime import datetime
+from selenium import webdriver
+import selenium.common.exceptions
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from schwifty import IBAN, exceptions
+import re
+from apscheduler.schedulers.background import BackgroundScheduler
 
-    if missing:
-        print(f"Required modules missing: {missing}")
-        print("Installing...")
-        subprocess.check_call([sys.executable, '-m', 'pip', 'install', *missing], stdout=subprocess.DEVNULL)
-
-
-try:
-    import sys
-    import subprocess
-    import pkg_resources
-    import tkinter as tk
-    from tkinter import ttk
-    import time
-    from selenium import webdriver
-    import selenium.common.exceptions
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    from selenium.webdriver.common.by import By
-    from schwifty import IBAN
-    import re
-
-    from gui_version import dictionaries
-except ImportError:
-    setup()
-    import sys
-    import subprocess
-    import pkg_resources
-    import tkinter as tk
-    from tkinter import ttk
-    import time
-    from selenium import webdriver
-    import selenium.common.exceptions
-    from selenium.webdriver.support.ui import WebDriverWait
-    from selenium.webdriver.support import expected_conditions as EC
-    from selenium.webdriver.common.by import By
-    from schwifty import IBAN, exceptions
-    import re
-
-    from gui_version import dictionaries
+from gui_version import dictionaries
 
 
 class Windows(tk.Tk):
@@ -330,12 +300,12 @@ class RunningPage(ttk.Frame):
         self.start_button = ttk.Button(
             self,
             text="Start signin",
-            command=self.signup
+            command=self.schedule_signup
         )
         self.back_button = ttk.Button(
             self,
             text="Back to Entry",
-            command=lambda: controller.show_frame(EntryPage)
+            command=lambda: [controller.show_frame(EntryPage), self.scheduler.remove_all_jobs()]
         )
         self.stop_button = ttk.Button(
             self,
@@ -369,125 +339,105 @@ class RunningPage(ttk.Frame):
 
         return time_str
 
+    def schedule_signup(self):
+        self.scheduler = BackgroundScheduler()
+        start_date = datetime.today()
+        start_time = start_date.replace(hour=self.controller.app_data['timestart_h'],
+                                        minute=self.controller.app_data['timestart_m'],
+                                        second=0)
+        self.signup_job = self.scheduler.add_job(self.signup, next_run_time=start_time)
+        self.scheduler.start()
+
+    def signup(self):
+        self.add_entries()
+
+        driver = webdriver.Chrome()
+
+        course_url = self.search_course(driver=driver)
+        driver.get(course_url)
+
+        driver.switch_to.window(driver.window_handles[1])
+
+        self.fill_in_data(driver=driver)
+
+        # submit form
+        wait = WebDriverWait(driver, timeout=15, poll_frequency=1)
+        wait.until(EC.element_to_be_clickable((By.ID, "bs_submit"))).click()
+
     def add_entries(self):
         self.controller.app_data['unlock_time'] = f"{self.controller.app_data['timestart_h'].get()}:{self.controller.app_data['timestart_m'].get()}:00"
         self.controller.app_data['sport_form'] = self.controller.app_data['sport'].get().replace(" ", "_")
         self.controller.app_data['status_code'] = dictionaries.poss_status[self.controller.app_data['status'].get()]
         self.controller.app_data['gender_code'] = dictionaries.poss_gender[self.controller.app_data['gender'].get()]
 
-    def signup(self):
-        self.add_entries()
+    def search_course(self, driver):
+        url = "https://server.sportzentrum.uni-kiel.de/angebote/aktueller_zeitraum/_" + self.controller.app_data[
+            'sport_form'] + ".html"
+        driver.get(url)
 
-        # setup variables
-        start = False
-        finish_search = False
-
-        # search for course
-        while not finish_search:
-            curr_time = self.get_time()
-
-            if not start:
-                if curr_time == self.controller.app_data['unlock_time']:  # start time
-                    start = True
-
-                print(f'\rCurrent time: {curr_time}', end='')  # countdown kinda
-
-            else:
-                print(f"\nStarting...")
-                # page setup
-                url = "https://server.sportzentrum.uni-kiel.de/angebote/aktueller_zeitraum/_" + self.controller.app_data['sport_form'] + ".html"
-                driver = webdriver.Chrome()
-                driver.get(url)
-
-                try:
-                    # are the submitting buttons available
-                    driver.find_element(By.TAG_NAME, "input")
-                except selenium.common.exceptions.NoSuchElementException:
-                    # if not: refresh
-                    print("Not available. Refreshing...")
-                    driver.refresh()
-                    pass
-                else:
-                    # if yes: find the correct course and click on the button
-                    tables = driver.find_elements(By.CLASS_NAME, "bs_angblock")
-
-                    for table in tables:
-                        tbl = table.find_elements(By.CLASS_NAME, "bs_kurse")
-                        body = tbl[0].find_element(By.TAG_NAME, "tbody")
-                        for row in body.find_elements(By.TAG_NAME, "tr"):
-                            cols = row.find_elements(By.TAG_NAME, "td")
-
-                            if cols[1].accessible_name == self.controller.app_data['detail'].get() \
-                                    and cols[2].accessible_name == self.controller.app_data['day'].get() \
-                                    and cols[3].accessible_name == self.controller.app_data['time'].get() \
-                                    and cols[6].accessible_name == self.controller.app_data['guidance'].get():
-                                print(f"Found course: {self.controller.app_data['detail'].get()}; {self.controller.app_data['guidance'].get()}; {self.controller.app_data['day'].get()}, {self.controller.app_data['time'].get()}. Opening signup...")
-                                button = cols[-1]
-                                button.click()
-                                driver.switch_to.window(driver.window_handles[1])
-                                finish_search = True
-                                break
-                        else:
-                            continue
-                        break
-
-            time.sleep(1)
-
-        # fill in data
-        # gender
-        boxes_gender = driver.find_elements(By.NAME, "sex")
-        for box in boxes_gender:
-            if box.accessible_name == " " + self.controller.app_data['gender_code']:
-                box.click()
+        while True:
+            try:
+                driver.find_element(By.TAG_NAME, "input")
                 break
-        # first name
-        driver.find_element(By.NAME, "vorname").send_keys(self.controller.app_data['firstname'].get())
-        # last name
-        driver.find_element(By.NAME, "name").send_keys(self.controller.app_data['lastname'].get())
-        # street
-        driver.find_element(By.NAME, "strasse").send_keys(self.controller.app_data['street'].get())
-        # city
-        driver.find_element(By.NAME, "ort").send_keys(self.controller.app_data['codecity'].get())
-        # status
-        driver.find_element(By.NAME, "statusorig").click()
-        driver.find_element(By.XPATH, "//option[@value='" + self.controller.app_data['status_code'] + "']").click()
-        # matriculation
+            except selenium.common.exceptions.NoSuchElementException:
+                driver.refresh()
+
+        tables = driver.find_elements(By.CLASS_NAME, "bs_angblock")
+        for table in tables:
+            tbl = table.find_elements(By.CLASS_NAME, "bs_kurse")
+            body = tbl[0].find_element(By.TAG_NAME, "tbody")
+            for row in body.find_elements(By.TAG_NAME, "tr"):
+                cols = row.find_elements(By.TAG_NAME, "td")
+                if cols[1].accessible_name == self.controller.app_data['detail'].get() \
+                        and cols[2].accessible_name == self.controller.app_data['day'].get() \
+                        and cols[3].accessible_name == self.controller.app_data['time'].get() \
+                        and cols[6].accessible_name == self.controller.app_data['guidance'].get():
+                    return cols[-1].get_attribute('href')
+
+    def fill_in_data(self, driver):
+
+        # gender
         try:
-            driver.find_element(By.NAME, "matnr").send_keys(self.controller.app_data['matnr'].get())
+            boxes_gender = driver.find_elements(By.NAME, "sex")
+            for box in boxes_gender:
+                if box.accessible_name == " " + self.controller.app_data['gender_code']:
+                    box.click()
+                    break
+            # first name
+            driver.find_element(By.NAME, "vorname").send_keys(self.controller.app_data['firstname'].get())
+            # last name
+            driver.find_element(By.NAME, "name").send_keys(self.controller.app_data['lastname'].get())
+            # street
+            driver.find_element(By.NAME, "strasse").send_keys(self.controller.app_data['street'].get())
+            # city
+            driver.find_element(By.NAME, "ort").send_keys(self.controller.app_data['codecity'].get())
+            # status
+            driver.find_element(By.NAME, "statusorig").click()
+            driver.find_element(By.XPATH, "//option[@value='" + self.controller.app_data['status_code'] + "']").click()
+            # matriculation
+            try:
+                driver.find_element(By.NAME, "matnr").send_keys(self.controller.app_data['matnr'].get())
+            except EC.NoSuchElementException:
+                pass
+            try:
+                driver.find_element(By.NAME, "mitnr").send_keys(self.controller.app_data['telephone'].get())
+            except EC.NoSuchElementException:
+                pass
+            # email
+            driver.find_element(By.NAME, "email").send_keys(self.controller.app_data['email'].get())
+            # checkboxes
+            check_boxes1 = driver.find_elements(By.NAME, "freifeld1")
+            check_boxes1[1].click()
+            driver.find_element(By.NAME, "freifeld3").click()
+            # iban
+            driver.find_element(By.NAME, "iban").send_keys(self.controller.app_data['iban'].get())
+            # last box
+            driver.find_element(By.NAME, "tnbed").click()
+
         except EC.NoSuchElementException:
             pass
-        try:
-            driver.find_element(By.NAME, "mitnr").send_keys(self.controller.app_data['telephone'].get())
-        except EC.NoSuchElementException:
-            pass
-        # email
-        driver.find_element(By.NAME, "email").send_keys(self.controller.app_data['email'].get())
-        # checkboxes
-        check_boxes1 = driver.find_elements(By.NAME, "freifeld1")
-        check_boxes1[1].click()
-        driver.find_element(By.NAME, "freifeld3").click()
-        # iban
-        driver.find_element(By.NAME, "iban").send_keys(self.controller.app_data['iban'].get())
-        # last box
-        driver.find_element(By.NAME, "tnbed").click()
-
-        # submit
-        wait = WebDriverWait(driver, timeout=10, poll_frequency=1)
-        wait.until(EC.element_to_be_clickable((By.ID, "bs_submit"))).click()
-
-        # final submit
-        print('''
-
-        Something went wrong. No problem at this step.
-        Please check if everything is filled in and correct and do the final submit at the bottom of the page!Have fun! :)
-
-        Note: The page will close in 2 min automatically or you can stop the script.
-        ''')
-
-        time.sleep(120)
 
 
 if __name__ == "__main__":
-
     app = Windows()
     app.mainloop()

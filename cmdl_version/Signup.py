@@ -1,17 +1,6 @@
-import sys
-import subprocess
-import pkg_resources
+
 from datetime import datetime
 import time
-
-required = {'selenium'}
-installed = {pkg.key for pkg in pkg_resources.working_set}
-missing = required - installed
-
-if missing:
-    print("A module is missing. Installing...")
-    subprocess.check_call([sys.executable, '-m', 'pip', 'install', *missing], stdout=subprocess.DEVNULL)
-
 from selenium import webdriver
 import selenium.common.exceptions
 from selenium.webdriver.support.ui import WebDriverWait
