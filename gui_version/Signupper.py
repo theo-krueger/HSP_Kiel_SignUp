@@ -7,7 +7,7 @@ import selenium.common.exceptions
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
-from schwifty import IBAN, exceptions
+import schwifty
 import re
 from apscheduler.schedulers.background import BackgroundScheduler
 
@@ -256,35 +256,35 @@ class EntryPage(ttk.Frame):
     def check_entries(self, controller):
         # check entries
         check = True
-        # time
-        if not len(self.controller.app_data["timestart_h"].get()) == 2 or not len(self.controller.app_data["timestart_m"].get()) == 2:
-            print("Time format invalid, please notice that both the hours and minutes need two digits each...")
-            check = False
-        # code city
-        code, city = self.controller.app_data["codecity"].get().split(" ")
-        if not len(code) == 5:
-            print("Post code invalid, please check...")
-            check = False
-        # IBAN
-        try:
-            IBAN(self.controller.app_data["iban"].get(), validate_bban=True)
-        except exceptions:
-            print("IBAN invalid, please check...")
-            check = False
-        # email
-        if not re.fullmatch(r"[^@]+@[^@]+\.[^@]+", self.controller.app_data["email"].get()):
-            print("Email invalid, please check...")
-            check = False
+        # # time
+        # if not len(self.controller.app_data["timestart_h"].get()) == 2 or not len(self.controller.app_data["timestart_m"].get()) == 2:
+        #     print("Time format invalid, please notice that both the hours and minutes need two digits each...")
+        #     check = False
+        # # code city
+        # code, city = self.controller.app_data["codecity"].get().split(" ")
+        # if not len(code) == 5:
+        #     print("Post code invalid, please check...")
+        #     check = False
+        # # IBAN
+        # try:
+        #     schwifty.IBAN(self.controller.app_data["iban"].get(), validate_bban=True)
+        # except schwifty.iban.exceptions:
+        #     print("IBAN invalid, please check...")
+        #     check = False
+        # # email
+        # if not re.fullmatch(r"[^@]+@[^@]+\.[^@]+", self.controller.app_data["email"].get()):
+        #     print("Email invalid, please check...")
+        #     check = False
 
         if check:
             controller.show_frame(RunningPage)
 
         # print entries
-        for entry in self.controller.app_data:
-            try:
-                print(f"{entry}: {self.controller.app_data[entry].get()}")
-            except AttributeError:
-                print(f"{entry}: {self.controller.app_data[entry]}")
+        # for entry in self.controller.app_data:
+        #     try:
+        #         print(f"{entry}: {self.controller.app_data[entry].get()}")
+        #     except AttributeError:
+        #         print(f"{entry}: {self.controller.app_data[entry]}")
 
 
 class RunningPage(ttk.Frame):
@@ -297,15 +297,16 @@ class RunningPage(ttk.Frame):
         self.time_lbl = ttk.Label(self,
                                   font=("calibri", 30, "bold")
                                   )
+        self.info_lbl = ttk.Label(self)
         self.start_button = ttk.Button(
             self,
             text="Start signin",
-            command=self.schedule_signup
+            command=lambda: [self.schedule_signup(), self.get_time()]
         )
         self.back_button = ttk.Button(
             self,
             text="Back to Entry",
-            command=lambda: [controller.show_frame(EntryPage), self.scheduler.remove_all_jobs()]
+            command=lambda: [controller.show_frame(EntryPage), self.scheduler.remove_all_jobs(), self.update_info_lbl("")]
         )
         self.stop_button = ttk.Button(
             self,
@@ -313,7 +314,8 @@ class RunningPage(ttk.Frame):
             command=self.controller.destroy
         )
 
-        self.time_lbl.grid(row=2, column=2, padx=(50, 50))
+        self.time_lbl.grid(row=1, column=2, padx=(50, 50))
+        self.info_lbl.grid(row=2, column=2, padx=(50,50))
         self.start_button.grid(row=3, column=2,)
         self.back_button.grid(row=4, column=1)
         self.stop_button.grid(row=4, column=3)
@@ -339,23 +341,34 @@ class RunningPage(ttk.Frame):
 
         return time_str
 
+    def update_info_lbl(self, info):
+        self.info_lbl.config(text=info)
+        self.controller.update()
+
     def schedule_signup(self):
-        self.scheduler = BackgroundScheduler()
+        self.scheduler = BackgroundScheduler(timezone="Europe/Berlin")
         start_date = datetime.today()
-        start_time = start_date.replace(hour=self.controller.app_data['timestart_h'],
-                                        minute=self.controller.app_data['timestart_m'],
+        start_time = start_date.replace(hour=int(self.controller.app_data['timestart_h'].get()),
+                                        minute=int(self.controller.app_data['timestart_m'].get()),
                                         second=0)
         self.signup_job = self.scheduler.add_job(self.signup, next_run_time=start_time)
         self.scheduler.start()
+        self.update_info_lbl("Waiting for the signup window...")
 
     def signup(self):
+
+        self.update_info_lbl("The time has come...")
+
         self.add_entries()
 
-        driver = webdriver.Chrome()
+        options = webdriver.ChromeOptions()
+        options.add_experimental_option('excludeSwitches', ['enable-automation'])
+        options.add_experimental_option('useAutomationExtension', False)
+        options.add_argument('--disable-blink-features=AutomationControlled')
+        driver = webdriver.Chrome(options=options)
 
-        course_url = self.search_course(driver=driver)
-        driver.get(course_url)
 
+        self.search_course(driver=driver)
         driver.switch_to.window(driver.window_handles[1])
 
         self.fill_in_data(driver=driver)
@@ -364,13 +377,16 @@ class RunningPage(ttk.Frame):
         wait = WebDriverWait(driver, timeout=15, poll_frequency=1)
         wait.until(EC.element_to_be_clickable((By.ID, "bs_submit"))).click()
 
+        self.update_info_lbl("Hopefully all of your data is entered now. Check once more if you want and click on submit.")
+
     def add_entries(self):
-        self.controller.app_data['unlock_time'] = f"{self.controller.app_data['timestart_h'].get()}:{self.controller.app_data['timestart_m'].get()}:00"
+
         self.controller.app_data['sport_form'] = self.controller.app_data['sport'].get().replace(" ", "_")
         self.controller.app_data['status_code'] = dictionaries.poss_status[self.controller.app_data['status'].get()]
         self.controller.app_data['gender_code'] = dictionaries.poss_gender[self.controller.app_data['gender'].get()]
 
     def search_course(self, driver):
+
         url = "https://server.sportzentrum.uni-kiel.de/angebote/aktueller_zeitraum/_" + self.controller.app_data[
             'sport_form'] + ".html"
         driver.get(url)
@@ -380,6 +396,7 @@ class RunningPage(ttk.Frame):
                 driver.find_element(By.TAG_NAME, "input")
                 break
             except selenium.common.exceptions.NoSuchElementException:
+                self.update_info_lbl("Page not ready. Refreshing...")
                 driver.refresh()
 
         tables = driver.find_elements(By.CLASS_NAME, "bs_angblock")
@@ -392,48 +409,52 @@ class RunningPage(ttk.Frame):
                         and cols[2].accessible_name == self.controller.app_data['day'].get() \
                         and cols[3].accessible_name == self.controller.app_data['time'].get() \
                         and cols[6].accessible_name == self.controller.app_data['guidance'].get():
-                    return cols[-1].get_attribute('href')
+                    button = cols[-1]
+                    button.click()
 
     def fill_in_data(self, driver):
 
         # gender
+        boxes_gender = driver.find_elements(By.NAME, "sex")
+        for box in boxes_gender:
+            if box.accessible_name == " " + self.controller.app_data['gender_code']:
+                box.click()
+                break
+        # first name
+        driver.find_element(By.ID, "BS_F1100").send_keys(self.controller.app_data['firstname'].get())
+        # last name
+        driver.find_element(By.ID, "BS_F1200").send_keys(self.controller.app_data['lastname'].get())
+        # street
+        driver.find_element(By.ID, "BS_F1300").send_keys(self.controller.app_data['street'].get())
+        # city
+        driver.find_element(By.ID, "BS_F1400").send_keys(self.controller.app_data['codecity'].get())
+        # status
+        driver.find_element(By.ID, "BS_F1600").click()
+        driver.find_element(By.XPATH, "//option[@value='" + self.controller.app_data['status_code'] + "']").click()
+        # matriculation
         try:
-            boxes_gender = driver.find_elements(By.NAME, "sex")
-            for box in boxes_gender:
-                if box.accessible_name == " " + self.controller.app_data['gender_code']:
-                    box.click()
-                    break
-            # first name
-            driver.find_element(By.NAME, "vorname").send_keys(self.controller.app_data['firstname'].get())
-            # last name
-            driver.find_element(By.NAME, "name").send_keys(self.controller.app_data['lastname'].get())
-            # street
-            driver.find_element(By.NAME, "strasse").send_keys(self.controller.app_data['street'].get())
-            # city
-            driver.find_element(By.NAME, "ort").send_keys(self.controller.app_data['codecity'].get())
-            # status
-            driver.find_element(By.NAME, "statusorig").click()
-            driver.find_element(By.XPATH, "//option[@value='" + self.controller.app_data['status_code'] + "']").click()
-            # matriculation
-            try:
-                driver.find_element(By.NAME, "matnr").send_keys(self.controller.app_data['matnr'].get())
-            except EC.NoSuchElementException:
-                pass
-            try:
-                driver.find_element(By.NAME, "mitnr").send_keys(self.controller.app_data['telephone'].get())
-            except EC.NoSuchElementException:
-                pass
-            # email
-            driver.find_element(By.NAME, "email").send_keys(self.controller.app_data['email'].get())
-            # checkboxes
-            check_boxes1 = driver.find_elements(By.NAME, "freifeld1")
-            check_boxes1[1].click()
-            driver.find_element(By.NAME, "freifeld3").click()
-            # iban
-            driver.find_element(By.NAME, "iban").send_keys(self.controller.app_data['iban'].get())
-            # last box
-            driver.find_element(By.NAME, "tnbed").click()
+            matnr_element = driver.find_element(By.ID, "BS_F1700")
+            tel_element = driver.find_element(By.ID, "BS_F1800")
+            if matnr_element.is_enabled():
+                matnr_element.send_keys(self.controller.app_data['matnr'].get())
+            elif tel_element.is_enabled():
+                tel_element.send_keys(self.controller.app_data['telephone'].get())
+        except selenium.common.exceptions.ElementNotInteractableException:
+            pass
+        # email
+        driver.find_element(By.ID, "BS_F2000").send_keys(self.controller.app_data['email'].get())
+        # checkboxes
+        check_boxes1 = driver.find_elements(By.NAME, "freifeld1")
+        check_boxes1[1].click()
+        driver.find_element(By.NAME, "freifeld3").click()
+        # iban
+        driver.find_element(By.ID, "BS_F_iban").send_keys(self.controller.app_data['iban'].get())
+        # last box
+        driver.find_element(By.NAME, "tnbed").click()
 
+    def silence_nosuchelementerror(self, func, *args, **kwargs):
+        try:
+            func(*args, **kwargs)
         except EC.NoSuchElementException:
             pass
 
