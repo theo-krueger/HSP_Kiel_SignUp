@@ -2,6 +2,8 @@
 
 Small script to automatically sign up for the sports programmes at Uni Kiel
 
+Currently, the maximum number of courses that can be automatically signed up for is one, but I am working on a version with unlimited signups.
+
 Good luck! No guarantees :D
 
 ## Use
