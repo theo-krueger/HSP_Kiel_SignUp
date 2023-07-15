@@ -1,12 +1,11 @@
 entry_data = [
-    "timestart_h",
-    "timestart_m",
+    "start_time",
     "sport",
     "detail",
     "day",
     "time",
     "guidance",
-    "sex",
+    "gender",
     "firstname",
     "lastname",
     "street",
@@ -19,10 +18,10 @@ entry_data = [
 ]
 
 poss_gender = {
+    "prefer not to say": "keine Angabe",
     "female": "weiblich",
     "male": "männlich",
     "diverse": "divers",
-    "no comment": "keine Angabe"
 }
 
 poss_status = {

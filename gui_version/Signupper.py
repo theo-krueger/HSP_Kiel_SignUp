@@ -1,464 +1,310 @@
-import tkinter as tk
-from tkinter import ttk
-import time
+from PyQt5 import QtCore, QtWidgets
+import sys
+import dictionaries
 from datetime import datetime
 from selenium import webdriver
 import selenium.common.exceptions
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
-import schwifty
-import re
-from apscheduler.schedulers.background import BackgroundScheduler
-
-from gui_version import dictionaries
+from apscheduler.schedulers.qt import QtScheduler
+from apscheduler.events import *
+from random import randint
 
 
-class Windows(tk.Tk):
+# creating a class that inherits the QDialog class
+class Window(QtWidgets.QDialog):
     def __init__(self):
-        tk.Tk.__init__(self)
+        super(Window, self).__init__()
 
-        container = ttk.Frame(self, height=400, width=600)
-        container.pack(side="top", fill="both", expand=True)
+        self.scheduler = Scheduler()
+        self.signup = signup()
 
-        container.grid_rowconfigure(0, weight=1)
-        container.grid_columnconfigure(0, weight=1)
+        self.setWindowTitle("Entry")
+        self.setGeometry(100, 100, 300, 400)
 
-        self.app_data = {
-            "timestart_h": tk.StringVar(),
-            "timestart_m": tk.StringVar(),
-            "sport": tk.StringVar(),
-            "detail": tk.StringVar(),
-            "day": tk.StringVar(),
-            "time": tk.StringVar(),
-            "guidance": tk.StringVar(),
-            "gender": tk.StringVar(),
-            "firstname": tk.StringVar(),
-            "lastname": tk.StringVar(),
-            "street": tk.StringVar(),
-            "codecity": tk.StringVar(),
-            "status": tk.StringVar(),
-            "matnr": tk.StringVar(),
-            "telephone": tk.StringVar(),
-            "email": tk.StringVar(),
-            "iban": tk.StringVar()
-        }
+        self.Entry_data = {}
 
-        self.frames = {}
-        for F in (StartPage, EntryPage, RunningPage):
-            frame = F(container, self)
+        # creating a group box
+        self.formGroupBox = QtWidgets.QGroupBox()
+        # input boxes
+        self.starttime_Label = QtWidgets.QLabel("Start time")
+        self.starttime_TimeEdit = QtWidgets.QTimeEdit()
+        self.sport_Label = QtWidgets.QLabel("Sport")
+        self.sport_LineEdit = QtWidgets.QLineEdit()
+        self.detail_Label = QtWidgets.QLabel("Detail")
+        self.detail_LineEdit = QtWidgets.QLineEdit()
+        self.day_Label = QtWidgets.QLabel("Day")
+        self.day_LineEdit = QtWidgets.QLineEdit()
+        self.time_Label = QtWidgets.QLabel("Time")
+        self.time_TimeEdit = QtWidgets.QTimeEdit()
+        self.guidance_Label = QtWidgets.QLabel("Guidance")
+        self.guidance_LineEdit = QtWidgets.QLineEdit()
+        self.gender_Label = QtWidgets.QLabel("Gender")
+        self.gender_ComboBox = QtWidgets.QComboBox()
+        self.gender_ComboBox.addItems([i for i in dictionaries.poss_gender.keys()])
+        self.firstname_Label = QtWidgets.QLabel("First name")
+        self.firstname_LineEdit = QtWidgets.QLineEdit()
+        self.lastname_Label = QtWidgets.QLabel("Last name")
+        self.lastname_LineEdit = QtWidgets.QLineEdit()
+        self.street_Label = QtWidgets.QLabel("Street/Nr")
+        self.street_LineEdit = QtWidgets.QLineEdit()
+        self.codecity_Label = QtWidgets.QLabel("Postcode/city")
+        self.codecity_LineEdit = QtWidgets.QLineEdit()
+        self.status_Label = QtWidgets.QLabel("Status")
+        self.status_ComboBox = QtWidgets.QComboBox()
+        self.status_ComboBox.addItems([i for i in dictionaries.poss_status.keys()])
+        self.status_ComboBox.currentTextChanged.connect(self.matr_or_phone)
+        self.matnr_Label = QtWidgets.QLabel("Matriculation number")
+        self.matnr_LineEdit = QtWidgets.QLineEdit()
+        self.telephone_Label = QtWidgets.QLabel("Work telephone")
+        self.telephone_LineEdit = QtWidgets.QLineEdit()
+        self.email_Label = QtWidgets.QLabel("Email")
+        self.email_LineEdit = QtWidgets.QLineEdit()
+        self.iban_Label = QtWidgets.QLabel("IBAN")
+        self.iban_LineEdit = QtWidgets.QLineEdit()
 
-            self.frames[F] = frame
-            frame.grid(row=0, column=0, sticky="nsew")
+        self.boxes = [self.starttime_TimeEdit, self.sport_LineEdit, self.detail_LineEdit, self.day_LineEdit,
+                      self.time_TimeEdit, self.guidance_LineEdit, self.gender_ComboBox, self.firstname_LineEdit,
+                      self.lastname_LineEdit, self.street_LineEdit, self.codecity_LineEdit, self.status_ComboBox,
+                      self.matnr_LineEdit, self.telephone_LineEdit, self.email_LineEdit, self.iban_LineEdit]
+        for box in self.boxes:
+            box.setMinimumWidth(300)
+        self.labels = [self.starttime_Label, self.sport_Label, self.detail_Label, self.day_Label, self.time_Label,
+                       self.guidance_Label, self.gender_Label, self.firstname_Label, self.lastname_Label,
+                       self.street_Label, self.codecity_Label, self.status_Label, self.matnr_Label,
+                       self.telephone_Label, self.email_Label, self.iban_Label]
+        for label in self.labels:
+            label.setMinimumWidth(150)
 
-        self.title("HSP SignUp")
+        self.joblist_button = QtWidgets.QPushButton("Print job list", self)
+        self.joblist_button.clicked.connect(self.job_list)
 
-        self.show_frame(StartPage)
+        # calling the method that create the form
+        self.create_form()
 
-    def show_frame(self, page):
-        frame = self.frames[page]
-        frame.tkraise()
+        # creating a dialog button for ok and cancel
+        self.buttonBox = QtWidgets.QDialogButtonBox(QtWidgets.QDialogButtonBox.Ok | QtWidgets.QDialogButtonBox.Close)
+        self.buttonBox.accepted.connect(self.getInfo)
+        self.buttonBox.rejected.connect(self.reject)
 
+        # creating a vertical layout
+        mainLayout = QtWidgets.QVBoxLayout()
 
-class StartPage(ttk.Frame):
-    def __init__(self, parent, controller):
-        ttk.Frame.__init__(self, parent)
-        self.controller = controller
+        # adding form group box to the layout
+        mainLayout.addWidget(self.formGroupBox)
+        mainLayout.addWidget(self.joblist_button)
+        mainLayout.addWidget(self.buttonBox)
 
-        self.grid_settings()
+        # setting lay out
+        self.setLayout(mainLayout)
 
-        info_text_text = """
-        Welcome and thanks for trusting me! I tried to find errors so this should work well but I give no
-        guarantees :p \n
-        In case you want to change data and/or restart the script you can stop it by closing this window. \n 
-        Please enter your data on the next page and click on submit after checking it. This window will stay open
-        until the script has finished running, please don't close it. When the website unlocks, a browser window
-        will open and insert all your data. If you have filled in all of the fields, it should lead to to the last
-        page where you can check the data again and will have to click on the final submit. \n
-        Good luck!
-        """
+    # get info method called when form is accepted
+    def getInfo(self):
+        self.Entry_data["start_time"] = self.starttime_TimeEdit.text() + ":00"
+        self.Entry_data["sport"] = self.sport_LineEdit.text()
+        self.Entry_data["detail"] = self.detail_LineEdit.text()
+        self.Entry_data["day"] = self.day_LineEdit.text()
+        if self.time_TimeEdit.text() == "00:00":
+            self.Entry_data["time"] = ""
+        else:
+            self.Entry_data["time"] = self.time_TimeEdit.text()
+        self.Entry_data["guidance"] = self.guidance_LineEdit.text()
+        self.Entry_data["gender"] = dictionaries.poss_gender[self.gender_ComboBox.currentText()]
+        self.Entry_data["firstname"] = self.firstname_LineEdit.text()
+        self.Entry_data["lastname"] = self.lastname_LineEdit.text()
+        self.Entry_data["streetnumber"] = self.street_LineEdit.text()
+        self.Entry_data["codecity"] = self.codecity_LineEdit.text()
+        self.Entry_data["status"] = dictionaries.poss_status[self.status_ComboBox.currentText()]
+        self.Entry_data["matnr"] = self.matnr_LineEdit.text()
+        self.Entry_data["telephone"] = self.telephone_LineEdit.text()
+        self.Entry_data["email"] = self.email_LineEdit.text()
+        self.Entry_data["iban"] = self.iban_LineEdit.text()
 
-        self.info_text = ttk.Label(
-            self,
-            text=info_text_text,
-            justify="left"
-        )
+        self.job_add(data=self.Entry_data)
 
-        self.enter_data_button = tk.Button(
-            self,
-            text="Enter your data",
-            command=lambda: controller.show_frame(EntryPage)
-        )
+    def matr_or_phone(self):
+        current_status = self.status_ComboBox.currentText()
+        if current_status in dictionaries.show_matr:
+            self.telephone_LineEdit.hide()
+            self.telephone_Label.hide()
+            self.matnr_LineEdit.show()
+            self.matnr_Label.show()
+        elif current_status in dictionaries.show_tel:
+            self.matnr_LineEdit.hide()
+            self.matnr_Label.hide()
+            self.telephone_LineEdit.show()
+            self.telephone_Label.show()
+        else:
+            self.matnr_LineEdit.hide()
+            self.matnr_Label.hide()
+            self.telephone_LineEdit.hide()
+            self.telephone_Label.hide()
 
-        self.info_text.grid(row=1, column=0, columnspan=4, sticky='nsew', padx=(50, 50))
-        self.info_text.bind('<Configure>', lambda e: self.info_text.config(wraplength=self.info_text.winfo_width()))
+    # create form method
+    def create_form(self):
+        # creating a form layout
+        layout = QtWidgets.QFormLayout()
 
-        self.enter_data_button.grid(row=4, column=0, pady=50)
+        # adding rows
+        layout.addRow(self.starttime_Label, self.starttime_TimeEdit)
+        layout.addRow(QtWidgets.QLabel(" "))
+        layout.addRow(self.sport_Label, self.sport_LineEdit)
+        layout.addRow(self.detail_Label, self.detail_LineEdit)
+        layout.addRow(self.day_Label, self.day_LineEdit)
+        layout.addRow(self.time_Label, self.time_TimeEdit)
+        layout.addRow(self.guidance_Label, self.guidance_LineEdit)
+        layout.addRow(QtWidgets.QLabel(" "))
+        layout.addRow(self.gender_Label, self.gender_ComboBox)
+        layout.addRow(self.firstname_Label, self.firstname_LineEdit)
+        layout.addRow(self.lastname_Label, self.lastname_LineEdit)
+        layout.addRow(self.street_Label, self.street_LineEdit)
+        layout.addRow(self.codecity_Label, self.codecity_LineEdit)
+        layout.addRow(self.status_Label, self.status_ComboBox)
+        layout.addRow(self.matnr_Label, self.matnr_LineEdit)
+        layout.addRow(self.telephone_Label, self.telephone_LineEdit)
+        layout.addRow(self.email_Label, self.email_LineEdit)
+        layout.addRow(self.iban_Label, self.iban_LineEdit)
 
-    def grid_settings(self):
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(5, weight=1)
+        # setting layout
+        self.formGroupBox.setLayout(layout)
 
-
-class EntryPage(ttk.Frame):
-    def __init__(self, parent, controller):
-        ttk.Frame.__init__(self, parent)
-        self.controller = controller
-
-        self.grid_settings()
-
-        self.controller.app_data_dic = {}
-
-        # labels
-        self.timestart_lbl = ttk.Label(self, text='Start time [hh:mm]')
-        self.timestart_sep = ttk.Label(self, text=":")
-        self.sport_lbl = ttk.Label(self, text='Sport type')
-        self.detail_lbl = ttk.Label(self, text='Detail')
-        self.day_lbl = ttk.Label(self, text='Day')
-        self.time_lbl = ttk.Label(self, text='Time')
-        self.guidance_lbl = ttk.Label(self, text='Guidance')
-        self.gender_lbl = ttk.Label(self, text='Gender')
-        self.firstname_lbl = ttk.Label(self, text='First name')
-        self.lastname_lbl = ttk.Label(self, text='Last name')
-        self.street_lbl = ttk.Label(self, text='Street and number')
-        self.codecity_lbl = ttk.Label(self, text='Code and city name')
-        self.status_lbl = ttk.Label(self, text='Status')
-        self.matnr_lbl = ttk.Label(self, text='Matriculation number')
-        self.telephone_lbl = ttk.Label(self, text='Work telephone number')
-        self.email_lbl = ttk.Label(self, text='Email')
-        self.iban_lbl = ttk.Label(self, text='IBAN')
-
-        # entry boxes
-        self.timestart_h_box = ttk.Entry(self, textvariable=self.controller.app_data["timestart_h"])
-        self.timestart_m_box = ttk.Entry(self, textvariable=self.controller.app_data["timestart_m"])
-
-        self.sport_box = ttk.Entry(self, textvariable=self.controller.app_data["sport"])
-        self.detail_box = ttk.Entry(self, textvariable=self.controller.app_data["detail"])
-        self.day_box = ttk.Entry(self, textvariable=self.controller.app_data["day"])
-        self.time_box = ttk.Entry(self, textvariable=self.controller.app_data["time"])
-        self.guidance_box = ttk.Entry(self, textvariable=self.controller.app_data["guidance"])
-
-        gender_list = [i for i in dictionaries.poss_gender.keys()]
-        self.controller.app_data["gender"].set("Gender")
-        self.gender_box = tk.OptionMenu(self, self.controller.app_data["gender"], *gender_list)
-
-        self.firstname_box = ttk.Entry(self, textvariable=self.controller.app_data["firstname"])
-        self.lastname_box = ttk.Entry(self, textvariable=self.controller.app_data["lastname"])
-        self.street_box = ttk.Entry(self, textvariable=self.controller.app_data["street"])
-        self.codecity_box = ttk.Entry(self, textvariable=self.controller.app_data["codecity"])
-
-        status_list = [i for i in dictionaries.poss_status.keys()]
-        self.controller.app_data["status"].set("Status")
-        self.status_box = tk.OptionMenu(self, self.controller.app_data["status"], *status_list)
-
-        self.matnr_box = ttk.Entry(self, textvariable=self.controller.app_data["matnr"])
-        self.telephone_box = ttk.Entry(self, textvariable=self.controller.app_data["telephone"])
-        self.email_box = ttk.Entry(self, textvariable=self.controller.app_data["email"])
-        self.iban_box = ttk.Entry(self, textvariable=self.controller.app_data["iban"])
-
-        self.continue_button = ttk.Button(
-            self,
-            text='Continue',
-            command=lambda: [self.controller.update(), self.check_entries(controller=controller)]
-        )
-
-        # arrange
-        self.full_width = 3
-        self.full_orientation = 'NSEW'
-        self.col_lbl = 1
-        self.col_box = 2
-        self.row_start = 2
-
-        self.timestart_lbl.grid(row=self.row_start+1, column=self.col_lbl, sticky='W', pady=(20, 0))
-        self.sport_lbl.grid(row=self.row_start+2, column=self.col_lbl, sticky='W')
-        self.detail_lbl.grid(row=self.row_start+4, column=self.col_lbl, sticky='W', pady=(15, 0))
-        self.day_lbl.grid(row=self.row_start+5, column=self.col_lbl, sticky='W')
-        self.time_lbl.grid(row=self.row_start+6, column=self.col_lbl, sticky='W')
-        self.guidance_lbl.grid(row=self.row_start+7, column=self.col_lbl, sticky='W')
-        self.gender_lbl.grid(row=self.row_start+9, column=self.col_lbl, sticky='W', pady=(15, 0))
-        self.firstname_lbl.grid(row=self.row_start+10, column=self.col_lbl, sticky='W')
-        self.lastname_lbl.grid(row=self.row_start+11, column=self.col_lbl, sticky='W')
-        self.street_lbl.grid(row=self.row_start+12, column=self.col_lbl, sticky='W')
-        self.codecity_lbl.grid(row=self.row_start+13, column=self.col_lbl, sticky='W')
-        self.status_lbl.grid(row=self.row_start+14, column=self.col_lbl, sticky='W')
-        self.email_lbl.grid(row=self.row_start+16, column=self.col_lbl, sticky='W')
-        self.iban_lbl.grid(row=self.row_start+17, column=self.col_lbl, sticky='W')
-
-        self.timestart_h_box.grid(row=self.row_start+1, column=self.col_box, sticky=self.full_orientation, pady=(20, 0))
-        self.timestart_sep.grid(row=self.row_start+1, column=self.col_box+1, pady=(20, 0))
-        self.timestart_m_box.grid(row=self.row_start+1, column=self.col_box+2, sticky=self.full_orientation, pady=(20, 0))
-        self.sport_box.grid(row=self.row_start+2, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
-        self.detail_box.grid(row=self.row_start+4, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation, pady=(15,0))
-        self.day_box.grid(row=self.row_start + 5, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
-        self.time_box.grid(row=self.row_start + 6, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
-        self.guidance_box.grid(row=self.row_start + 7, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
-        self.gender_box.grid(row=self.row_start+9, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation, pady=(15, 0))
-        self.firstname_box.grid(row=self.row_start+10, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
-        self.lastname_box.grid(row=self.row_start+11, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
-        self.street_box.grid(row=self.row_start+12, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
-        self.codecity_box.grid(row=self.row_start+13, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
-        self.status_box.grid(row=self.row_start+14, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
-        self.email_box.grid(row=self.row_start+16, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
-        self.iban_box.grid(row=self.row_start+17, column=self.col_box, columnspan=self.full_width, sticky=self.full_orientation)
-
-        def matr_or_phone(*args):
-            mattel_wid = [self.matnr_lbl, self.matnr_box, self.telephone_lbl, self.telephone_box]
-            for w in mattel_wid:
-                w.grid_remove()
-            if self.controller.app_data["status"].get() in dictionaries.show_matr:
-                self.matnr_lbl.grid(row=self.row_start+15, column=self.col_lbl, sticky='W')
-                self.matnr_box.grid(row=self.row_start+15, column=self.col_box, columnspan=self.full_width,
-                                    sticky=self.full_orientation)
-            elif self.controller.app_data["status"].get() in dictionaries.show_tel:
-                self.telephone_lbl.grid(row=self.row_start+15, column=self.col_lbl, sticky='W')
-                self.telephone_box.grid(row=self.row_start+15, column=self.col_box, columnspan=self.full_width,
-                                        sticky=self.full_orientation)
-
-        self.controller.app_data["status"].trace("w", matr_or_phone)
-
-        self.continue_button.grid(row=self.row_start+21, column=3, pady=20)
-
-    def grid_settings(self):
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_columnconfigure(2, weight=1)
-        self.grid_columnconfigure(3, weight=1)
-        self.grid_columnconfigure(4, weight=1)
-        self.grid_columnconfigure(5, weight=1)
-        self.grid_columnconfigure(6, weight=1)
-        self.grid_columnconfigure(6, weight=1)
-        self.grid_columnconfigure(8, weight=1)
-        self.grid_columnconfigure(9, weight=1)
-        self.grid_columnconfigure(10, weight=1)
-
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
-        self.grid_rowconfigure(2, weight=1)
-        self.grid_rowconfigure(3, weight=1)
-        self.grid_rowconfigure(4, weight=1)
-        self.grid_rowconfigure(5, weight=1)
-        self.grid_rowconfigure(6, weight=1)
-        self.grid_rowconfigure(7, weight=1)
-        self.grid_rowconfigure(8, weight=1)
-        self.grid_rowconfigure(9, weight=1)
-        self.grid_rowconfigure(10, weight=1)
-        self.grid_rowconfigure(11, weight=1)
-        self.grid_rowconfigure(12, weight=1)
-        self.grid_rowconfigure(13, weight=1)
-        self.grid_rowconfigure(14, weight=1)
-        self.grid_rowconfigure(15, weight=1)
-        self.grid_rowconfigure(16, weight=1)
-        self.grid_rowconfigure(17, weight=1)
-        self.grid_rowconfigure(18, weight=1)
-        self.grid_rowconfigure(19, weight=1)
-        self.grid_rowconfigure(20, weight=1)
-
-    def check_entries(self, controller):
-        # check entries
-        check = True
-        # # time
-        # if not len(self.controller.app_data["timestart_h"].get()) == 2 or not len(self.controller.app_data["timestart_m"].get()) == 2:
-        #     print("Time format invalid, please notice that both the hours and minutes need two digits each...")
-        #     check = False
-        # # code city
-        # code, city = self.controller.app_data["codecity"].get().split(" ")
-        # if not len(code) == 5:
-        #     print("Post code invalid, please check...")
-        #     check = False
-        # # IBAN
-        # try:
-        #     schwifty.IBAN(self.controller.app_data["iban"].get(), validate_bban=True)
-        # except schwifty.iban.exceptions:
-        #     print("IBAN invalid, please check...")
-        #     check = False
-        # # email
-        # if not re.fullmatch(r"[^@]+@[^@]+\.[^@]+", self.controller.app_data["email"].get()):
-        #     print("Email invalid, please check...")
-        #     check = False
-
-        if check:
-            controller.show_frame(RunningPage)
-
-        # print entries
-        # for entry in self.controller.app_data:
-        #     try:
-        #         print(f"{entry}: {self.controller.app_data[entry].get()}")
-        #     except AttributeError:
-        #         print(f"{entry}: {self.controller.app_data[entry]}")
-
-
-class RunningPage(ttk.Frame):
-    def __init__(self, parent, controller):
-        ttk.Frame.__init__(self, parent)
-        self.controller = controller
-
-        self.grid_settings()
-
-        self.time_lbl = ttk.Label(self,
-                                  font=("calibri", 30, "bold")
-                                  )
-        self.info_lbl = ttk.Label(self)
-        self.start_button = ttk.Button(
-            self,
-            text="Start signin",
-            command=lambda: [self.schedule_signup(), self.get_time()]
-        )
-        self.back_button = ttk.Button(
-            self,
-            text="Back to Entry",
-            command=lambda: [controller.show_frame(EntryPage), self.scheduler.remove_all_jobs(), self.update_info_lbl("")]
-        )
-        self.stop_button = ttk.Button(
-            self,
-            text="Close",
-            command=self.controller.destroy
-        )
-
-        self.time_lbl.grid(row=1, column=2, padx=(50, 50))
-        self.info_lbl.grid(row=2, column=2, padx=(50,50))
-        self.start_button.grid(row=3, column=2,)
-        self.back_button.grid(row=4, column=1)
-        self.stop_button.grid(row=4, column=3)
-
-    def grid_settings(self):
-        self.grid_columnconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_columnconfigure(2, weight=1)
-        self.grid_columnconfigure(3, weight=1)
-        self.grid_columnconfigure(4, weight=1)
-
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_rowconfigure(1, weight=1)
-        self.grid_rowconfigure(2, weight=1)
-        self.grid_rowconfigure(3, weight=1)
-        self.grid_rowconfigure(4, weight=1)
-
-    def get_time(self):
-        time_str = time.strftime('%H:%M:%S')
-        self.time_lbl.config(text=time_str)
-        self.time_lbl.after(1000, self.get_time)
-        self.controller.update()
-
-        return time_str
-
-    def update_info_lbl(self, info):
-        self.info_lbl.config(text=info)
-        self.controller.update()
-
-    def schedule_signup(self):
-        self.scheduler = BackgroundScheduler(timezone="Europe/Berlin")
+    def job_add(self, data):
         start_date = datetime.today()
-        start_time = start_date.replace(hour=int(self.controller.app_data['timestart_h'].get()),
-                                        minute=int(self.controller.app_data['timestart_m'].get()),
-                                        second=0)
-        self.signup_job = self.scheduler.add_job(self.signup, next_run_time=start_time)
+        start_time_parts = data["start_time"].split(":")
+        start_time = start_date.replace(hour=int(start_time_parts[0]),
+                                        minute=int(start_time_parts[1]),
+                                        second=int(start_time_parts[2]))
+
+        id_ = data["sport"] + "_" + data["day"] + "_" + data["time"]
+        existing_ids = [i.id for i in self.scheduler.scheduler.get_jobs()]
+        if id_ in existing_ids:
+            id_ = id_ + str(randint(0, 1000))
+
+        self.scheduler.add_job(self.signup.main, start_time, id_, kwargs={"Entry_data": data})
+
+    def job_list(self):
+        message = "Jobs:"
+
+        jobs = self.scheduler.scheduler.get_jobs()
+        if not jobs:
+            message = message + "\n\t" + "no jobs currently scheduled"
+        for job in jobs:
+            message = message + "\n\t" + f"ID: {job.id}; Next run: {job.next_run_time.strftime('%Y/%m/%d %H:%M')}"
+
+        print(message)
+
+
+class Scheduler(QtCore.QObject):
+    def __init__(self):
+        super().__init__()
+        self.scheduler = QtScheduler(timezone="Europe/Berlin")
+        self.scheduler.add_listener(self.listener, EVENT_JOB_MISSED)
         self.scheduler.start()
-        self.update_info_lbl("Waiting for the signup window...")
 
-    def signup(self):
+    def add_job(self, func, start_time, id_, kwargs=None):
+        self.scheduler.add_job(func, next_run_time=start_time, id=id_, kwargs=kwargs)
+        print("Job submitted.")
 
-        self.update_info_lbl("The time has come...")
+    def shutdown(self):
+        self.scheduler.shutdown()
 
-        self.add_entries()
-
-        options = webdriver.ChromeOptions()
-        options.add_experimental_option('excludeSwitches', ['enable-automation'])
-        options.add_experimental_option('useAutomationExtension', False)
-        options.add_argument('--disable-blink-features=AutomationControlled')
-        driver = webdriver.Chrome(options=options)
+    def listener(self, event):
+        if event.code == EVENT_JOB_MISSED:
+            print("Given event time was missed. Job canceled. Please check that the start time is in the future...")
 
 
-        self.search_course(driver=driver)
-        driver.switch_to.window(driver.window_handles[1])
+class signup:
+    def main(self, **kwargs):
+        Entry_data = kwargs.get("Entry_data")
 
-        self.fill_in_data(driver=driver)
+        def open_page():
+            url = f"https://server.sportzentrum.uni-kiel.de/angebote/aktueller_zeitraum/_{Entry_data['sport']}.html"
+            global driver
+            driver = webdriver.Chrome()
+            driver.get(url)
 
-        # submit form
-        wait = WebDriverWait(driver, timeout=15, poll_frequency=1)
-        wait.until(EC.element_to_be_clickable((By.ID, "bs_submit"))).click()
+        def refresh_page():
+            print("Not available. Refreshing...")
+            driver.refresh()
 
-        self.update_info_lbl("Hopefully all of your data is entered now. Check once more if you want and click on submit.")
-
-    def add_entries(self):
-
-        self.controller.app_data['sport_form'] = self.controller.app_data['sport'].get().replace(" ", "_")
-        self.controller.app_data['status_code'] = dictionaries.poss_status[self.controller.app_data['status'].get()]
-        self.controller.app_data['gender_code'] = dictionaries.poss_gender[self.controller.app_data['gender'].get()]
-
-    def search_course(self, driver):
-
-        url = "https://server.sportzentrum.uni-kiel.de/angebote/aktueller_zeitraum/_" + self.controller.app_data[
-            'sport_form'] + ".html"
-        driver.get(url)
-
-        while True:
+        def find_course():
             try:
                 driver.find_element(By.TAG_NAME, "input")
-                break
             except selenium.common.exceptions.NoSuchElementException:
-                self.update_info_lbl("Page not ready. Refreshing...")
-                driver.refresh()
+                refresh_page()
+                pass
+            else:
+                tables = driver.find_elements(By.CLASS_NAME, "bs_angblock")
 
-        tables = driver.find_elements(By.CLASS_NAME, "bs_angblock")
-        for table in tables:
-            tbl = table.find_elements(By.CLASS_NAME, "bs_kurse")
-            body = tbl[0].find_element(By.TAG_NAME, "tbody")
-            for row in body.find_elements(By.TAG_NAME, "tr"):
-                cols = row.find_elements(By.TAG_NAME, "td")
-                if cols[1].accessible_name == self.controller.app_data['detail'].get() \
-                        and cols[2].accessible_name == self.controller.app_data['day'].get() \
-                        and cols[3].accessible_name == self.controller.app_data['time'].get() \
-                        and cols[6].accessible_name == self.controller.app_data['guidance'].get():
-                    button = cols[-1]
-                    button.click()
+                for table in tables:
+                    tbl = table.find_elements(By.CLASS_NAME, "bs_kurse")
+                    body = tbl[0].find_element(By.TAG_NAME, "tbody")
+                    for row in body.find_elements(By.TAG_NAME, "tr"):
+                        cols = row.find_elements(By.TAG_NAME, "td")
 
-    def fill_in_data(self, driver):
+                        if cols[1].accessible_name == Entry_data["detail"] and \
+                           cols[2].accessible_name == Entry_data["day"] and \
+                           cols[3].accessible_name == Entry_data["time"] and \
+                           cols[6].accessible_name == Entry_data["guidance"]:
+                            print(
+                                "Found course:",
+                                Entry_data['sport'],
+                                Entry_data['detail'],
+                                Entry_data['guidance'],
+                                Entry_data['day'],
+                                Entry_data['time'],
+                                "Opening signup...",
+                                sep="\n\t"
+                            )
+                            button = cols[-1]
+                            button.click()
+                            driver.switch_to.window(driver.window_handles[1])
+                            break
+                    else:
+                        continue
+                    break
 
-        # gender
-        boxes_gender = driver.find_elements(By.NAME, "sex")
-        for box in boxes_gender:
-            if box.accessible_name == " " + self.controller.app_data['gender_code']:
-                box.click()
-                break
-        # first name
-        driver.find_element(By.ID, "BS_F1100").send_keys(self.controller.app_data['firstname'].get())
-        # last name
-        driver.find_element(By.ID, "BS_F1200").send_keys(self.controller.app_data['lastname'].get())
-        # street
-        driver.find_element(By.ID, "BS_F1300").send_keys(self.controller.app_data['street'].get())
-        # city
-        driver.find_element(By.ID, "BS_F1400").send_keys(self.controller.app_data['codecity'].get())
-        # status
-        driver.find_element(By.ID, "BS_F1600").click()
-        driver.find_element(By.XPATH, "//option[@value='" + self.controller.app_data['status_code'] + "']").click()
-        # matriculation
-        try:
-            matnr_element = driver.find_element(By.ID, "BS_F1700")
-            tel_element = driver.find_element(By.ID, "BS_F1800")
-            if matnr_element.is_enabled():
-                matnr_element.send_keys(self.controller.app_data['matnr'].get())
-            elif tel_element.is_enabled():
-                tel_element.send_keys(self.controller.app_data['telephone'].get())
-        except selenium.common.exceptions.ElementNotInteractableException:
-            pass
-        # email
-        driver.find_element(By.ID, "BS_F2000").send_keys(self.controller.app_data['email'].get())
-        # checkboxes
-        check_boxes1 = driver.find_elements(By.NAME, "freifeld1")
-        check_boxes1[1].click()
-        driver.find_element(By.NAME, "freifeld3").click()
-        # iban
-        driver.find_element(By.ID, "BS_F_iban").send_keys(self.controller.app_data['iban'].get())
-        # last box
-        driver.find_element(By.NAME, "tnbed").click()
+        def fill_in_data():
+            boxes_gender = driver.find_elements(By.NAME, "sex")
+            for box in boxes_gender:
+                if box.accessible_name == " " + Entry_data["gender"]:
+                    box.click()
+                    break
 
-    def silence_nosuchelementerror(self, func, *args, **kwargs):
-        try:
-            func(*args, **kwargs)
-        except EC.NoSuchElementException:
-            pass
+            driver.find_element(By.NAME, "vorname").send_keys(Entry_data["firstname"])
+            driver.find_element(By.NAME, "name").send_keys(Entry_data["lastname"])
+            driver.find_element(By.NAME, "strasse").send_keys(Entry_data["streetnumber"])
+            driver.find_element(By.NAME, "ort").send_keys(Entry_data["codecity"])
+
+            driver.find_element(By.NAME, "statusorig").click()
+            driver.find_element(By.XPATH, "//option[@value='" + Entry_data["status"] + "']").click()
+
+            driver.find_element(By.NAME, "matnr").send_keys(Entry_data["matnr"])
+            driver.find_element(By.NAME, "email").send_keys(Entry_data["email"])
+
+            check_boxes1 = driver.find_elements(By.NAME, "freifeld1")
+            check_boxes1[1].click()
+            driver.find_element(By.NAME, "freifeld3").click()
+
+            driver.find_element(By.NAME, "iban").send_keys(Entry_data["iban"])
+            driver.find_element(By.NAME, "tnbed").click()
+
+        def submit_form():
+            wait = WebDriverWait(driver, timeout=10, poll_frequency=1)
+            wait.until(EC.element_to_be_clickable((By.ID, "bs_submit"))).click()
+
+        # Usage:
+        open_page()
+        find_course()
+        fill_in_data()
+        submit_form()
 
 
-if __name__ == "__main__":
-    app = Windows()
-    app.mainloop()
+# main method
+if __name__ == '__main__':
+    app = QtWidgets.QApplication(sys.argv)
+    window = Window()
+    window.show()
+    # start the app
+    sys.exit(app.exec())
