@@ -21,7 +21,7 @@ class Window(QtWidgets.QDialog):
         self.signup = signup()
 
         self.setWindowTitle("Entry")
-        self.setGeometry(100, 100, 300, 400)
+        self.setGeometry(100, 100, 300, 500)
 
         self.Entry_data = {}
 
@@ -30,7 +30,7 @@ class Window(QtWidgets.QDialog):
         # input boxes
         self.starttime_Label = QtWidgets.QLabel("Start time")
         self.starttime_TimeEdit = QtWidgets.QTimeEdit()
-        self.sport_Label = QtWidgets.QLabel("Sport")
+        self.sport_Label = QtWidgets.QLabel("Sport URL (Please copy address from the browser)")
         self.sport_LineEdit = QtWidgets.QLineEdit()
         self.detail_Label = QtWidgets.QLabel("Detail")
         self.detail_LineEdit = QtWidgets.QLineEdit()
@@ -75,7 +75,7 @@ class Window(QtWidgets.QDialog):
                        self.street_Label, self.codecity_Label, self.status_Label, self.matnr_Label,
                        self.telephone_Label, self.email_Label, self.iban_Label]
         for label in self.labels:
-            label.setMinimumWidth(150)
+            label.setMinimumWidth(350)
 
         self.joblist_button = QtWidgets.QPushButton("Print job list", self)
         self.joblist_button.clicked.connect(self.job_list)
@@ -176,7 +176,8 @@ class Window(QtWidgets.QDialog):
                                         minute=int(start_time_parts[1]),
                                         second=int(start_time_parts[2]))
 
-        id_ = data["sport"] + "_" + data["day"] + "_" + data["time"]
+        sport = data["sport"].split("/")[-1]
+        id_ = sport + "_" + data["day"] + "_" + data["time"]
         existing_ids = [i.id for i in self.scheduler.scheduler.get_jobs()]
         if id_ in existing_ids:
             id_ = id_ + str(randint(0, 1000))
@@ -219,7 +220,7 @@ class signup:
         Entry_data = kwargs.get("Entry_data")
 
         def open_page():
-            url = f"https://server.sportzentrum.uni-kiel.de/angebote/aktueller_zeitraum/_{Entry_data['sport']}.html"
+            url = Entry_data['sport']
             global driver
             driver = webdriver.Chrome()
             driver.get(url)
